@@ -1471,6 +1471,7 @@ async function gasGet(action, payload) {
     showSyncStatus('送信中...', 'amber');
     const data = encodeURIComponent(JSON.stringify(payload));
     const url = `${gasUrl}?action=${action}&data=${data}`;
+    console.log('gasGet:', action, 'URL長:' + url.length);
     const res = await fetch(url, { redirect:'follow' });
     if (res.ok) {
       const text = await res.text();
@@ -1503,49 +1504,58 @@ async function gasSaveRecord(empId, dk) {
   // 2. この日の日次データ1行を送信
   const emp = employees.find(e => e.id === empId);
   if (emp) {
-    const [y, m, d] = dk.split('-').map(Number);
-    const nonWork = isNonWorkDay(y, m, d, emp.schedule);
-    const inStr = rec.clockIn ? fmtTime(rec.clockIn) : '';
-    const outStr = rec.clockOut ? fmtTime(rec.clockOut) : '';
-    const brks = rec.breaks || [];
-    const brkHrs = calcBreakHours(brks);
-    const hrs = calcHours(inStr, outStr, brkHrs);
-    const inH = parseHM(inStr);
-    let lateEarly = 0;
-    if (inH && inH > 9) lateEarly = rd(inH - 9);
-    const brkOutStr = brks.map(b => fmtTime(b.out)).filter(Boolean).join(' / ') || '';
-    const brkInStr = brks.map(b => fmtTime(b.back)).filter(Boolean).join(' / ') || '';
-    const dailyRow = [
-      emp.id, emp.name, emp.dept, scheduleLabel(emp.schedule),
-      `${y}/${m}/${d}`, 1, nonWork ? 1 : 0, rec.reason || '',
-      inStr, 0, brkOutStr, 0, brkInStr, 0, outStr, 0,
-      hrs.regular, hrs.overtime, hrs.earlyOT, hrs.lateNight, 0, brkHrs, lateEarly
-    ];
-    await gasGet('upsertDailyRow', { row: dailyRow });
-    // 3. この従業員の月次集計1行を送信
-    const pm = getProcessingMonth(dk);
-    const pDates = getPeriodDates(pm.y, pm.m, cutoffDay);
-    let sched=0, worked=0, tReg=0, tOT=0, tEarly=0, tLate=0, lateCnt=0, tLE=0, tBrk=0, brkCnt=0;
-    pDates.forEach(dt => {
-      if (!isNonWorkDay(dt.y, dt.m, dt.d, emp.schedule)) sched++;
-      const r = records[recKey(emp.id, dateKey(dt.y, dt.m, dt.d))];
-      if (r?.clockIn) {
-        worked++;
-        const iS = fmtTime(r.clockIn), oS = r.clockOut ? fmtTime(r.clockOut) : '';
-        const b = r.breaks || [], bh = calcBreakHours(b);
-        if (b.length) brkCnt += b.length; tBrk += bh;
-        const h = calcHours(iS, oS, bh);
-        tReg += h.regular; tOT += h.overtime; tEarly += h.earlyOT; tLate += h.lateNight;
-        const ih = parseHM(iS);
-        if (ih && ih > 9) { lateCnt++; tLE += ih - 9; }
-      }
-    });
-    const monthlyRow = [
-      emp.id, emp.dept, emp.name, scheduleLabel(emp.schedule),
-      pm.m, sched, worked, 0, 0, Math.max(0, sched - worked), 0, lateCnt, brkCnt, 0, 0,
-      rd(tReg), rd(tOT), rd(tEarly), rd(tLate), 0, 0, 0, 0, 0, rd(tLE), rd(tBrk)
-    ];
-    await gasGet('upsertMonthlyRow', { row: monthlyRow });
+    try {
+      const [y, m, d] = dk.split('-').map(Number);
+      const nonWork = isNonWorkDay(y, m, d, emp.schedule);
+      const inStr = rec.clockIn ? fmtTime(rec.clockIn) : '';
+      const outStr = rec.clockOut ? fmtTime(rec.clockOut) : '';
+      const brks = rec.breaks || [];
+      const brkHrs = calcBreakHours(brks);
+      const hrs = calcHours(inStr, outStr, brkHrs);
+      const inH = parseHM(inStr);
+      let lateEarly = 0;
+      if (inH && inH > 9) lateEarly = rd(inH - 9);
+      const brkOutStr = brks.map(b => fmtTime(b.out)).filter(Boolean).join(' / ') || '';
+      const brkInStr = brks.map(b => fmtTime(b.back)).filter(Boolean).join(' / ') || '';
+      const dailyRow = [
+        emp.id, emp.name, emp.dept, scheduleLabel(emp.schedule),
+        `${y}/${m}/${d}`, 1, nonWork ? 1 : 0, rec.reason || '',
+        inStr, 0, brkOutStr, 0, brkInStr, 0, outStr, 0,
+        hrs.regular, hrs.overtime, hrs.earlyOT, hrs.lateNight, 0, brkHrs, lateEarly
+      ];
+      console.log('日次送信:', JSON.stringify(dailyRow).length + '文字');
+      const dailyResult = await gasGet('upsertDailyRow', { row: dailyRow });
+      console.log('日次結果:', dailyResult);
+
+      // 3. この従業員の月次集計1行を送信
+      const pm = getProcessingMonth(dk);
+      const pDates = getPeriodDates(pm.y, pm.m, cutoffDay);
+      let sched=0, worked=0, tReg=0, tOT=0, tEarly=0, tLate=0, lateCnt=0, tLE=0, tBrk=0, brkCnt=0;
+      pDates.forEach(dt => {
+        if (!isNonWorkDay(dt.y, dt.m, dt.d, emp.schedule)) sched++;
+        const r = records[recKey(emp.id, dateKey(dt.y, dt.m, dt.d))];
+        if (r?.clockIn) {
+          worked++;
+          const iS = fmtTime(r.clockIn), oS = r.clockOut ? fmtTime(r.clockOut) : '';
+          const b = r.breaks || [], bh = calcBreakHours(b);
+          if (b.length) brkCnt += b.length; tBrk += bh;
+          const h = calcHours(iS, oS, bh);
+          tReg += h.regular; tOT += h.overtime; tEarly += h.earlyOT; tLate += h.lateNight;
+          const ih = parseHM(iS);
+          if (ih && ih > 9) { lateCnt++; tLE += ih - 9; }
+        }
+      });
+      const monthlyRow = [
+        emp.id, emp.dept, emp.name, scheduleLabel(emp.schedule),
+        pm.m, sched, worked, 0, 0, Math.max(0, sched - worked), 0, lateCnt, brkCnt, 0, 0,
+        rd(tReg), rd(tOT), rd(tEarly), rd(tLate), 0, 0, 0, 0, 0, rd(tLE), rd(tBrk)
+      ];
+      console.log('月次送信:', JSON.stringify(monthlyRow).length + '文字');
+      const monthlyResult = await gasGet('upsertMonthlyRow', { row: monthlyRow });
+      console.log('月次結果:', monthlyResult);
+    } catch(e) {
+      console.error('日次/月次送信エラー:', e);
+    }
   }
   console.log('gasSaveRecord完了:', empId, dk);
 }
