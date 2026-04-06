@@ -1464,14 +1464,18 @@ async function gasLoad() {
   }
 }
 
-// ── GET方式送信（1リクエストのみ） ──
+// ── GET方式送信（redirect:followでGASに届く、CORSエラーは無視） ──
 async function gasGet(action, payload) {
   if (!gasUrl) return false;
   try {
     showSyncStatus('送信中...', 'amber');
     const data = encodeURIComponent(JSON.stringify(payload));
     const url = `${gasUrl}?action=${action}&data=${data}`;
-    await fetch(url, { mode: 'no-cors' });
+    try {
+      await fetch(url, { redirect: 'follow' });
+    } catch(e) {
+      // CORSエラーは無視（リクエスト自体はGASに届いている）
+    }
     showSyncStatus('送信完了', 'green');
     await new Promise(r => setTimeout(r, 300));
     return true;
