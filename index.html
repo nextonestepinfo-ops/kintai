@@ -1465,24 +1465,16 @@ async function gasLoad() {
   }
 }
 
-// ── GET方式送信（3方式同時送信で確実にGASに届ける） ──
+// ── GET方式送信（1リクエストのみ） ──
 async function gasGet(action, payload) {
   if (!gasUrl) return false;
   try {
     showSyncStatus('送信中...', 'amber');
     const data = encodeURIComponent(JSON.stringify(payload));
     const url = `${gasUrl}?action=${action}&data=${data}`;
-    console.log('gasGet:', action, 'URL長:' + url.length);
-    // 方式1: fetch no-cors
-    fetch(url, { mode: 'no-cors' }).catch(() => {});
-    // 方式2: Image beacon
-    new Image().src = url;
-    // 方式3: script tag
-    const s = document.createElement('script');
-    s.src = url; s.onerror = () => s.remove(); s.onload = () => s.remove();
-    document.head.appendChild(s);
+    await fetch(url, { mode: 'no-cors' });
     showSyncStatus('送信完了', 'green');
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 300));
     return true;
   } catch(e) {
     console.error('gasGet error:', e);
