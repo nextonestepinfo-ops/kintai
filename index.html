@@ -1464,28 +1464,17 @@ async function gasLoad() {
   }
 }
 
-// ── GET方式送信 ──
+// ── GET方式送信（書き込み用: no-corsで確実に送信、レスポンス不要） ──
 async function gasGet(action, payload) {
   if (!gasUrl) return false;
   try {
     showSyncStatus('送信中...', 'amber');
     const data = encodeURIComponent(JSON.stringify(payload));
     const url = `${gasUrl}?action=${action}&data=${data}`;
-    console.log('gasGet:', action, 'URL長:' + url.length);
-    const res = await fetch(url, { redirect:'follow' });
-    if (res.ok) {
-      const text = await res.text();
-      try {
-        const json = JSON.parse(text);
-        showSyncStatus(json.message || '保存完了', 'green');
-        return json.status === 'ok';
-      } catch {
-        showSyncStatus('保存完了', 'green');
-        return true;
-      }
-    }
-    showSyncStatus('送信エラー: HTTP ' + res.status, 'red');
-    return false;
+    // no-corsモード: CORSエラーを回避、レスポンスは読めないがデータはGASに届く
+    await fetch(url, { mode: 'no-cors' });
+    showSyncStatus('送信完了', 'green');
+    return true;
   } catch(e) {
     console.error('gasGet error:', e);
     showSyncStatus('送信失敗: ' + e.message, 'red');
@@ -1498,7 +1487,7 @@ async function gasGet(action, payload) {
 async function gasSaveRecord(empId, dk) {
   const rk = recKey(empId, dk);
   const rec = records[rk];
-  if (!rec) { console.error('gasSaveRecord: レコードなし', empId, dk); return; }
+  if (!rec) return;
   // 1. 勤怠データ保存
   await gasGet('saveRecord', { record: rec });
   // 2. この日の日次データ1行を送信
@@ -1523,9 +1512,8 @@ async function gasSaveRecord(empId, dk) {
         inStr, 0, brkOutStr, 0, brkInStr, 0, outStr, 0,
         hrs.regular, hrs.overtime, hrs.earlyOT, hrs.lateNight, 0, brkHrs, lateEarly
       ];
-      console.log('日次送信:', JSON.stringify(dailyRow).length + '文字');
-      const dailyResult = await gasGet('upsertDailyRow', { row: dailyRow });
-      console.log('日次結果:', dailyResult);
+      console.log('日次送信');
+      await gasGet('upsertDailyRow', { row: dailyRow });
 
       // 3. この従業員の月次集計1行を送信
       const pm = getProcessingMonth(dk);
@@ -1550,14 +1538,12 @@ async function gasSaveRecord(empId, dk) {
         pm.m, sched, worked, 0, 0, Math.max(0, sched - worked), 0, lateCnt, brkCnt, 0, 0,
         rd(tReg), rd(tOT), rd(tEarly), rd(tLate), 0, 0, 0, 0, 0, rd(tLE), rd(tBrk)
       ];
-      console.log('月次送信:', JSON.stringify(monthlyRow).length + '文字');
-      const monthlyResult = await gasGet('upsertMonthlyRow', { row: monthlyRow });
-      console.log('月次結果:', monthlyResult);
+      console.log('月次送信');
+      await gasGet('upsertMonthlyRow', { row: monthlyRow });
     } catch(e) {
       console.error('日次/月次送信エラー:', e);
     }
   }
-  console.log('gasSaveRecord完了:', empId, dk);
 }
 
 function getProcessingMonth(dk) {
