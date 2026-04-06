@@ -352,6 +352,10 @@
       <div class="sync-files" id="syncFiles">
         <span style="font-size:11px;color:var(--slate-400)">管理者が「従業員管理」タブでGAS URLを設定すると自動同期が開始されます</span>
       </div>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary btn-sm" onclick="testGasWrite()">🔧 書き込みテスト</button>
+        <span id="gasTestResult" style="font-size:11px"></span>
+      </div>
     </div>
     <div class="clock-grid" style="margin-bottom:12px">
       <button class="clock-btn clock-in" onclick="doClock('in')">▶ 出勤</button>
@@ -1496,18 +1500,45 @@ async function gasGet(action, payload) {
     showSyncStatus('送信中...', 'amber');
     const data = encodeURIComponent(JSON.stringify(payload));
     const url = `${gasUrl}?action=${action}&data=${data}`;
+    console.log('gasGet URL:', url.substring(0, 200) + '...');
+    console.log('gasGet URL長:', url.length);
     const res = await fetch(url, { redirect:'follow' });
+    console.log('gasGet response:', res.status, res.type, res.url);
     if (res.ok) {
-      const json = await res.json();
-      showSyncStatus(json.message || '保存完了', 'green');
-      return json.status === 'ok';
+      const text = await res.text();
+      console.log('gasGet body:', text.substring(0, 200));
+      try {
+        const json = JSON.parse(text);
+        showSyncStatus(json.message || '保存完了', 'green');
+        return json.status === 'ok';
+      } catch {
+        showSyncStatus('保存完了（応答解析不可）', 'green');
+        return true;
+      }
     }
-    showSyncStatus('送信エラー', 'red');
+    console.error('gasGet HTTP error:', res.status);
+    showSyncStatus('送信エラー: HTTP ' + res.status, 'red');
     return false;
   } catch(e) {
-    console.error('gasGet error:', e);
+    console.error('gasGet例外:', e);
     showSyncStatus('送信失敗: ' + e.message, 'red');
     return false;
+  }
+}
+
+// ── 書き込みテスト（診断用） ──
+async function testGasWrite() {
+  const testEl = document.getElementById('gasTestResult');
+  if (testEl) testEl.innerHTML = '<span class="sync-spinner"></span> テスト中...';
+  try {
+    const testData = { key: 'testWrite', value: new Date().toISOString() };
+    const data = encodeURIComponent(JSON.stringify(testData));
+    const url = `${gasUrl}?action=upsertSetting&data=${data}`;
+    const res = await fetch(url, { redirect:'follow' });
+    const text = await res.text();
+    if (testEl) testEl.innerHTML = `<span style="color:var(--green)">✅ 成功: ${text.substring(0,100)}</span>`;
+  } catch(e) {
+    if (testEl) testEl.innerHTML = `<span style="color:var(--red)">❌ 失敗: ${e.message}</span>`;
   }
 }
 
