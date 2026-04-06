@@ -1511,28 +1511,6 @@ async function gasGet(action, payload) {
   }
 }
 
-// ── POST方式送信（大規模データ用、no-corsで確実に送信） ──
-async function gasPost(action, payload) {
-  if (!gasUrl) return false;
-  try {
-    showSyncStatus('送信中...', 'amber');
-    await fetch(gasUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action, ...payload })
-    });
-    // no-corsではレスポンスが読めないため、送信完了とみなす
-    showSyncStatus('送信完了', 'green');
-    console.log('gasPost送信:', action);
-    return true;
-  } catch(e) {
-    console.error('gasPost error:', e);
-    showSyncStatus('送信失敗: ' + e.message, 'red');
-    return false;
-  }
-}
-
 function getProcessingMonth(dk) {
   const [y, m, d] = dk.split('-').map(Number);
   if (cutoffDay === 0) return { y, m };
@@ -1544,28 +1522,14 @@ function getProcessingMonth(dk) {
   return { y, m };
 }
 
+// ── 打刻レコード1件をGET方式で保存 ──
 async function gasSaveRecord(empId, dk) {
   const rk = recKey(empId, dk);
   const rec = records[rk];
+  if (!rec) return;
+  await gasGet('saveRecord', { record: rec });
   const pm = getProcessingMonth(dk);
-  const dailyRows = buildDailyRowsAll(pm.y, pm.m, cutoffDay);
-  const dailyData = dailyRows.map(r => [
-    r.empId, r.empName, r.dept, r.schLabel, r.date, r.shift, r.isHol, r.reason,
-    r.clockIn, 0, r.breakOut, 0, r.breakBack, 0, r.clockOut, 0,
-    r.regular, r.overtime, r.earlyOT, r.lateNight, 0, r.breakHrs, r.lateEarly
-  ]);
-  const monthlyRows = buildMonthlyRowsAll(pm.y, pm.m, cutoffDay);
-  const monthlyData = monthlyRows.map(s => [
-    s.empId, s.dept, s.name, s.schLabel, s.month, s.sched, s.worked,
-    0, 0, s.absent, 0, s.lateCnt, s.brkCnt, 0, 0,
-    s.regular, s.overtime, s.earlyOT, s.lateNight, 0,
-    0, 0, 0, 0, s.lateEarly, s.breakTime
-  ]);
-  await gasPost('saveRecord', {
-    record: rec, month: pm.m,
-    dailyHeaders: DAILY_HEADERS, dailyRows: dailyData,
-    monthlyHeaders: MONTHLY_HEADERS, monthlyRows: monthlyData
-  });
+  await gasSyncMonth(pm.y, pm.m);
 }
 
 // ── 従業員1件をスプレッドシートに追加・更新 ──
@@ -1589,25 +1553,34 @@ async function gasUpsertSetting(key, value) {
   return await gasGet('upsertSetting', { key, value });
 }
 
+// ── 月次同期: 従業員1人ずつGET方式で分割送信 ──
 async function gasSyncMonth(y, m) {
   if (!gasUrl) return;
-  const dailyRows = buildDailyRowsAll(y, m, cutoffDay);
-  const dailyData = dailyRows.map(r => [
-    r.empId, r.empName, r.dept, r.schLabel, r.date, r.shift, r.isHol, r.reason,
-    r.clockIn, 0, r.breakOut, 0, r.breakBack, 0, r.clockOut, 0,
-    r.regular, r.overtime, r.earlyOT, r.lateNight, 0, r.breakHrs, r.lateEarly
-  ]);
-  const monthlyRows = buildMonthlyRowsAll(y, m, cutoffDay);
-  const monthlyData = monthlyRows.map(s => [
-    s.empId, s.dept, s.name, s.schLabel, s.month, s.sched, s.worked,
-    0, 0, s.absent, 0, s.lateCnt, s.brkCnt, 0, 0,
-    s.regular, s.overtime, s.earlyOT, s.lateNight, 0,
-    0, 0, 0, 0, s.lateEarly, s.breakTime
-  ]);
-  await gasPost('syncMonth', {
-    month: m, dailyHeaders: DAILY_HEADERS, dailyRows: dailyData,
-    monthlyHeaders: MONTHLY_HEADERS, monthlyRows: monthlyData
-  });
+  showSyncStatus('月次同期中...', 'amber');
+  const allDaily = buildDailyRowsAll(y, m, cutoffDay);
+  const allMonthly = buildMonthlyRowsAll(y, m, cutoffDay);
+  for (const emp of employees) {
+    const dailyRows = allDaily.filter(r => r.empId === emp.id);
+    const dailyData = dailyRows.map(r => [
+      r.empId, r.empName, r.dept, r.schLabel, r.date, r.shift, r.isHol, r.reason,
+      r.clockIn, 0, r.breakOut, 0, r.breakBack, 0, r.clockOut, 0,
+      r.regular, r.overtime, r.earlyOT, r.lateNight, 0, r.breakHrs, r.lateEarly
+    ]);
+    const monthlyRows = allMonthly.filter(r => r.empId === emp.id);
+    const monthlyData = monthlyRows.map(s => [
+      s.empId, s.dept, s.name, s.schLabel, s.month, s.sched, s.worked,
+      0, 0, s.absent, 0, s.lateCnt, s.brkCnt, 0, 0,
+      s.regular, s.overtime, s.earlyOT, s.lateNight, 0,
+      0, 0, 0, 0, s.lateEarly, s.breakTime
+    ]);
+    if (dailyData.length > 0) {
+      await gasGet('syncMonth', {
+        month: m, dailyHeaders: DAILY_HEADERS, dailyRows: dailyData,
+        monthlyHeaders: MONTHLY_HEADERS, monthlyRows: monthlyData
+      });
+    }
+  }
+  showSyncStatus(`${m}月分 同期完了`, 'green');
 }
 
 let monthSyncTimer = null;
