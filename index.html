@@ -1521,16 +1521,20 @@ async function gasSaveRecord(empId, dk) {
       if (inH && inH > 9) lateEarly = rd(inH - 9);
       const brkOut = brks.map(b => fmtTime(b.out)).filter(Boolean).join(' / ') || '';
       const brkIn = brks.map(b => fmtTime(b.back)).filter(Boolean).join(' / ') || '';
-      // 変更セルのみ送信（列番号は1始まり）
+      // 値がある列のみ送信（空の値で既存データを上書きしない）
+      const cols = {};
+      if (inStr) cols[9] = inStr;
+      if (outStr) cols[15] = outStr;
+      if (brkOut) cols[11] = brkOut;
+      if (brkIn) cols[13] = brkIn;
+      if (rec.reason) cols[8] = rec.reason;
+      cols[7] = nonWork ? 1 : 0;
+      cols[17] = hrs.regular; cols[18] = hrs.overtime;
+      cols[19] = hrs.earlyOT; cols[20] = hrs.lateNight;
+      cols[22] = brkHrs; cols[23] = lateEarly;
       await gasGet('updateDailyCells', {
         empId: emp.id, date: `${y}/${m}/${d}`,
-        year: pm.y, month: pm.m,
-        cols: {
-          7: nonWork ? 1 : 0, 8: rec.reason || '',
-          9: inStr, 11: brkOut, 13: brkIn, 15: outStr,
-          17: hrs.regular, 18: hrs.overtime, 19: hrs.earlyOT,
-          20: hrs.lateNight, 22: brkHrs, 23: lateEarly
-        }
+        year: pm.y, month: pm.m, cols
       });
       // 3. 月次集計1行を更新
       const pDates = getPeriodDates(pm.y, pm.m, cutoffDay);
