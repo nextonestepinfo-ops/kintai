@@ -494,7 +494,7 @@ const DEFAULT_PASSWORDS = {
 let employees = [], records = {}, punchLog = [], passwords = {};
 let viewYear, viewMonth, selectedEmpId, cutoffDay = 20;
 let currentUser = null;
-let gasUrl = 'https://script.google.com/macros/s/AKfycbxA0cJxhgV-R4qY5_aRz2wOiUzWxY0sXvdeFR93ZKRxp8zeJDP1bnDzmgKQvRvgVfjG/exec';
+let gasUrl = 'https://script.google.com/macros/s/AKfycbzbCbQAI6sveFE15qiaAm5-A7xi67DZwt2Wl0Oqo7vr6-V-BfPElhzT5ilsRBDJGgY/exec';
 
 async function sGet(k, fb) {
   try {
@@ -1513,7 +1513,8 @@ async function gasSaveRecord(empId, dk) {
         hrs.regular, hrs.overtime, hrs.earlyOT, hrs.lateNight, 0, brkHrs, lateEarly
       ];
       console.log('日次送信');
-      await gasGet('upsertDailyRow', { row: dailyRow });
+      const dpm = getProcessingMonth(dk);
+      await gasGet('upsertDailyRow', { row: dailyRow, year: dpm.y, month: dpm.m });
 
       // 3. この従業員の月次集計1行を送信
       const pm = getProcessingMonth(dk);
