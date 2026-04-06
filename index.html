@@ -494,7 +494,7 @@ const DEFAULT_PASSWORDS = {
 let employees = [], records = {}, punchLog = [], passwords = {};
 let viewYear, viewMonth, selectedEmpId, cutoffDay = 20;
 let currentUser = null;
-let gasUrl = 'https://script.google.com/macros/s/AKfycbxoQQXXbesMlFuB1raggghf3kSz8WSwEYMEkGD1cDhJ5YVWy2BzfbLnUcr3v-lDlAYG/exec';
+let gasUrl = 'https://script.google.com/macros/s/AKfycbybH6BiWPHyG6_Ev0aba-uD0frvsimSR_1Nit5K30XE6e95eZRSh584zSvtDLT1PnFq/exec';
 
 async function sGet(k, fb) {
   try {
@@ -713,8 +713,7 @@ function enterApp() {
     curPMonth++;
     if (curPMonth > 12) { curPMonth = 1; curPYear++; }
   }
-  // 月別シートを初期化（既存データがあればスキップ）
-  gasGet('initMonthSheet', { year: curPYear, month: curPMonth, cutoffDay });
+  // 月別シートはGAS側でログイン時に自動作成される
 }
 
 function doLogout() {
