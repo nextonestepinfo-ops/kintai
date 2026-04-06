@@ -495,7 +495,8 @@ const DEFAULT_PASSWORDS = {
 let employees = [], records = {}, punchLog = [], passwords = {};
 let viewYear, viewMonth, selectedEmpId, cutoffDay = 20;
 let currentUser = null;
-let gasUrl = 'https://script.google.com/macros/s/AKfycbw2lFGlsaPMbKdTrotELqHiVYZBcMw0c34sKxXcI_81Y6Cp0dKAMFJYkEfzy02ucAKJ/exec';
+let dailySheets = {}, monthlySheets = {};
+let gasUrl = 'https://script.google.com/macros/s/AKfycbzV_Lh0g0sbuCr5m7Bwp28EXCwcG5XjJtL6O-jyben9YY33trz7LveGvNQLLVnsWNIz/exec';
 
 async function sGet(k, fb) {
   try {
@@ -526,6 +527,8 @@ async function init() {
   passwords  = await sGet(KEYS.passwords, DEFAULT_PASSWORDS);
   if (!passwords.emp) passwords.emp = {};
   if (!passwords.admin) passwords.admin = 'admin1234';
+  dailySheets = await sGet('kintai-daily-sheets', {});
+  monthlySheets = await sGet('kintai-monthly-sheets', {});
   // gasUrlはハードコード済み。ローカルストレージの古いURLでは上書きしない
 
   // GAS URLがあればスプレッドシートから従業員マスターを取得（ページ読み込み時）
@@ -1444,21 +1447,25 @@ async function gasLoad() {
     passwords = data.passwords || { admin:'admin1234', emp:{} };
     cutoffDay = data.settings?.cutoffDay ?? 20;
     records = data.records || {};
+    dailySheets = data.dailySheets || {};
+    monthlySheets = data.monthlySheets || {};
 
     // ローカルストレージにも保存
     await sSet(KEYS.employees, employees);
     await sSet(KEYS.passwords, passwords);
     await sSet(KEYS.settings, { cutoffDay });
     await sSet(KEYS.records, records);
+    await sSet('kintai-daily-sheets', dailySheets);
+    await sSet('kintai-monthly-sheets', monthlySheets);
 
     showSyncStatus('読み込み完了', 'green');
     const syncFilesEl = document.getElementById('syncFiles');
     if (syncFilesEl) {
       syncFilesEl.innerHTML =
-        `<span style="font-size:10px;color:var(--slate-400)">従業員${employees.length}名 / レコード${Object.keys(records).length}件</span>
+        `<span style="font-size:10px;color:var(--slate-400)">従業員${employees.length}名 / レコード${Object.keys(records).length}件 / 日次${Object.keys(dailySheets).length}シート / 月次${Object.keys(monthlySheets).length}シート</span>
          <button class="sync-dl-btn" onclick="gasLoad().then(()=>{populateEmpSelects();updateTodayStatus();renderRecentLog();toast('✅ 再読込完了')})" style="border-color:var(--slate-300);color:var(--slate-500)">🔄 再読込</button>`;
     }
-    console.log('gasLoad成功: 従業員' + employees.length + '名');
+    console.log('gasLoad成功: 従業員' + employees.length + '名, レコード' + Object.keys(records).length + '件, 日次' + Object.keys(dailySheets).length + 'シート');
     return true;
   } catch(e) {
     console.error('gasLoad失敗:', e);
