@@ -497,18 +497,14 @@ let currentUser = null;
 let gasUrl = 'https://script.google.com/macros/s/AKfycbxoHVgzcy6XvbbfLReaFvrl9-KwDGj55IPjkJUSUhldFCh6UQ2G6xKNd6zJuz7FS2TU/exec';
 
 async function sGet(k, fb) {
-  // shared → personal の順で読み込み（どちらか成功すればOK）
-  try { const r = await window.storage.get(k, true); if (r) return JSON.parse(r.value); }
-  catch {}
-  try { const r = await window.storage.get(k, false); if (r) return JSON.parse(r.value); }
-  catch {}
-  return fb;
+  try {
+    const v = localStorage.getItem(k);
+    return v ? JSON.parse(v) : fb;
+  } catch { return fb; }
 }
 async function sSet(k, v) {
-  const json = JSON.stringify(v);
-  // shared + personal の両方に保存（片方失敗しても安全）
-  try { await window.storage.set(k, json, true); } catch(e) { console.error('Storage(shared):', e); }
-  try { await window.storage.set(k, json, false); } catch(e) { console.error('Storage(personal):', e); }
+  try { localStorage.setItem(k, JSON.stringify(v)); }
+  catch(e) { console.error('Storage:', e); }
 }
 
 // ═══════════════════════════════════════════
