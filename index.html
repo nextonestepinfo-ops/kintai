@@ -1475,6 +1475,7 @@ async function gasGet(action, payload) {
     showSyncStatus('送信中...', 'amber');
     const data = encodeURIComponent(JSON.stringify(payload));
     const url = `${gasUrl}?action=${action}&data=${data}`;
+    console.log('gasGet:', action, 'URL長:', url.length);
     const res = await fetch(url, { redirect:'follow' });
     if (res.ok) {
       const text = await res.text();
@@ -1501,8 +1502,10 @@ async function gasGet(action, payload) {
 async function gasSaveRecord(empId, dk) {
   const rk = recKey(empId, dk);
   const rec = records[rk];
-  if (!rec) return;
-  await gasGet('saveRecord', { record: rec });
+  if (!rec) { console.error('gasSaveRecord: レコードなし', empId, dk); return; }
+  console.log('gasSaveRecord送信:', empId, dk, JSON.stringify(rec).length + '文字');
+  const result = await gasGet('saveRecord', { record: rec });
+  console.log('gasSaveRecord結果:', result);
 }
 
 // ── 従業員1件をスプレッドシートに追加・更新 ──
@@ -1528,6 +1531,7 @@ async function gasUpsertSetting(key, value) {
 
 let monthSyncTimer = null;
 function scheduleSyncRecord(empId, dk) {
+  console.log('scheduleSyncRecord:', empId, dk);
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => gasSaveRecord(empId, dk), 600);
 }
