@@ -352,10 +352,6 @@
       <div class="sync-files" id="syncFiles">
         <span style="font-size:11px;color:var(--slate-400)">管理者が「従業員管理」タブでGAS URLを設定すると自動同期が開始されます</span>
       </div>
-      <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
-        <button class="btn btn-primary btn-sm" onclick="testGasWrite()">🔧 書き込みテスト</button>
-        <span id="gasTestResult" style="font-size:11px"></span>
-      </div>
     </div>
     <div class="clock-grid" style="margin-bottom:12px">
       <button class="clock-btn clock-in" onclick="doClock('in')">▶ 出勤</button>
@@ -498,7 +494,7 @@ const DEFAULT_PASSWORDS = {
 let employees = [], records = {}, punchLog = [], passwords = {};
 let viewYear, viewMonth, selectedEmpId, cutoffDay = 20;
 let currentUser = null;
-let gasUrl = 'https://script.google.com/macros/s/AKfycbzqA9zsCLMPzxjj9ICCpTIakhah4J911VH3zHwd_tLAOMUATOCdB8_D5CwKPGAypo-4/exec';
+let gasUrl = 'https://script.google.com/macros/s/AKfycbxoHVgzcy6XvbbfLReaFvrl9-KwDGj55IPjkJUSUhldFCh6UQ2G6xKNd6zJuz7FS2TU/exec';
 
 async function sGet(k, fb) {
   // shared → personal の順で読み込み（どちらか成功すればOK）
@@ -536,28 +532,11 @@ async function init() {
   // gasUrlはハードコード済み。ローカルストレージの古いURLでは上書きしない
 
   // GAS URLがあればスプレッドシートから従業員マスターを取得（ページ読み込み時）
-  let gasLoadResult = '';
   if (gasUrl) {
-    const ok = await gasLoad();
-    if (ok) {
-      gasLoadResult = `<div style="margin-top:12px;padding:8px 12px;background:#ecfdf5;border-radius:6px;font-size:11px;color:#059669">
-        ✅ スプレッドシート接続成功（従業員${employees.length}名）<br>
-        ${employees.map(e => `${e.name}: <b>${scheduleLabel(e.schedule)}</b> [raw: ${e._rawSchedule || '?'}]`).join(' / ')}
-      </div>`;
-    } else {
-      gasLoadResult = `<div style="margin-top:12px;padding:8px 12px;background:#fef2f2;border-radius:6px;font-size:11px;color:#dc2626">
-        ⚠ スプレッドシートに接続できません。ローカルデータを使用中
-      </div>`;
-    }
+    await gasLoad();
   }
 
   renderLoginFields();
-
-  // ログイン画面に接続結果を表示
-  if (gasLoadResult) {
-    const errEl = document.getElementById('loginErr');
-    if (errEl) errEl.innerHTML = gasLoadResult;
-  }
 
   if (gasUrl) {
     const toggleLabel = document.querySelector('#loginScreen [onclick="toggleGasSetup()"]');
@@ -738,7 +717,7 @@ function enterApp() {
     curPMonth++;
     if (curPMonth > 12) { curPMonth = 1; curPYear++; }
   }
-  gasSyncMonth(curPYear, curPMonth);
+
 }
 
 function doLogout() {
@@ -762,8 +741,8 @@ function setupTabs() {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-      if (btn.dataset.tab === 'daily') { renderDaily(); scheduleSyncMonth(); }
-      if (btn.dataset.tab === 'monthly') { renderMonthly(); scheduleSyncMonth(); }
+      if (btn.dataset.tab === 'daily') { renderDaily(); }
+      if (btn.dataset.tab === 'monthly') { renderMonthly(); }
       if (btn.dataset.tab === 'employees') renderEmployees();
     });
   });
@@ -909,7 +888,7 @@ function changeMonth(d) {
   if (viewMonth < 1) { viewMonth = 12; viewYear--; }
   renderDaily();
   renderMonthly();
-  scheduleSyncMonth();
+
 }
 
 function populateEmpSelects() {
@@ -1375,7 +1354,7 @@ function exportDailyXlsx() {
   XLSX.utils.book_append_sheet(wb, ws, '日次データ');
   XLSX.writeFile(wb, `勤怠_日次_${viewYear}年${viewMonth}月度.xlsx`);
   toast('📥 日次データをXLSX出力しました');
-  gasSyncMonth(viewYear, viewMonth);
+
 }
 
 function exportMonthlyXlsx() {
@@ -1392,7 +1371,7 @@ function exportMonthlyXlsx() {
   XLSX.utils.book_append_sheet(wb, ws, '月次集計');
   XLSX.writeFile(wb, `勤怠_月次_${viewYear}年${viewMonth}月度.xlsx`);
   toast('📥 月次集計をXLSX出力しました');
-  gasSyncMonth(viewYear, viewMonth);
+
 }
 
 // ═══════════════════════════════════════════
@@ -1462,11 +1441,7 @@ async function gasLoad() {
 
     // スプレッドシートの従業員マスターで上書き（マスターデータ）
     employees = data.employees || [];
-    // デバッグ: GASからの生データを記録
-    const rawSchedules = employees.map(e => `${e.name}:schedule=${JSON.stringify(e.schedule)}`).join(' / ');
-    console.log('GAS生データ:', rawSchedules);
-
-    employees.forEach(e => { e._rawSchedule = e.schedule; e.schedule = normalizeSchedule(e.schedule); });
+    employees.forEach(e => { e.schedule = normalizeSchedule(e.schedule); });
     passwords = data.passwords || { admin:'admin1234', emp:{} };
     cutoffDay = data.settings?.cutoffDay ?? 20;
     records = data.records || {};
@@ -1484,7 +1459,7 @@ async function gasLoad() {
         `<span style="font-size:10px;color:var(--slate-400)">従業員${employees.length}名 / レコード${Object.keys(records).length}件</span>
          <button class="sync-dl-btn" onclick="gasLoad().then(()=>{populateEmpSelects();updateTodayStatus();renderRecentLog();toast('✅ 再読込完了')})" style="border-color:var(--slate-300);color:var(--slate-500)">🔄 再読込</button>`;
     }
-    console.log('gasLoad成功: 従業員' + employees.length + '名', employees.map(e => e.name + ':' + e.schedule));
+    console.log('gasLoad成功: 従業員' + employees.length + '名');
     return true;
   } catch(e) {
     console.error('gasLoad失敗:', e);
@@ -1493,65 +1468,34 @@ async function gasLoad() {
   }
 }
 
-// ── GET方式送信（小規模） ──
+// ── GET方式送信 ──
 async function gasGet(action, payload) {
   if (!gasUrl) return false;
   try {
     showSyncStatus('送信中...', 'amber');
     const data = encodeURIComponent(JSON.stringify(payload));
     const url = `${gasUrl}?action=${action}&data=${data}`;
-    console.log('gasGet URL:', url.substring(0, 200) + '...');
-    console.log('gasGet URL長:', url.length);
     const res = await fetch(url, { redirect:'follow' });
-    console.log('gasGet response:', res.status, res.type, res.url);
     if (res.ok) {
       const text = await res.text();
-      console.log('gasGet body:', text.substring(0, 200));
       try {
         const json = JSON.parse(text);
         showSyncStatus(json.message || '保存完了', 'green');
         return json.status === 'ok';
       } catch {
-        showSyncStatus('保存完了（応答解析不可）', 'green');
+        showSyncStatus('保存完了', 'green');
         return true;
       }
     }
-    console.error('gasGet HTTP error:', res.status);
     showSyncStatus('送信エラー: HTTP ' + res.status, 'red');
     return false;
   } catch(e) {
-    console.error('gasGet例外:', e);
+    console.error('gasGet error:', e);
     showSyncStatus('送信失敗: ' + e.message, 'red');
     return false;
   }
 }
 
-// ── 書き込みテスト（診断用） ──
-async function testGasWrite() {
-  const testEl = document.getElementById('gasTestResult');
-  if (testEl) testEl.innerHTML = '<span class="sync-spinner"></span> テスト中...';
-  try {
-    const testData = { key: 'testWrite', value: new Date().toISOString() };
-    const data = encodeURIComponent(JSON.stringify(testData));
-    const url = `${gasUrl}?action=upsertSetting&data=${data}`;
-    const res = await fetch(url, { redirect:'follow' });
-    const text = await res.text();
-    if (testEl) testEl.innerHTML = `<span style="color:var(--green)">✅ 成功: ${text.substring(0,100)}</span>`;
-  } catch(e) {
-    if (testEl) testEl.innerHTML = `<span style="color:var(--red)">❌ 失敗: ${e.message}</span>`;
-  }
-}
-
-function getProcessingMonth(dk) {
-  const [y, m, d] = dk.split('-').map(Number);
-  if (cutoffDay === 0) return { y, m };
-  if (d > cutoffDay) {
-    let nm = m + 1, ny = y;
-    if (nm > 12) { nm = 1; ny++; }
-    return { y: ny, m: nm };
-  }
-  return { y, m };
-}
 
 // ── 打刻レコード1件をGET方式で保存 ──
 async function gasSaveRecord(empId, dk) {
@@ -1559,8 +1503,6 @@ async function gasSaveRecord(empId, dk) {
   const rec = records[rk];
   if (!rec) return;
   await gasGet('saveRecord', { record: rec });
-  const pm = getProcessingMonth(dk);
-  await gasSyncMonth(pm.y, pm.m);
 }
 
 // ── 従業員1件をスプレッドシートに追加・更新 ──
@@ -1584,44 +1526,10 @@ async function gasUpsertSetting(key, value) {
   return await gasGet('upsertSetting', { key, value });
 }
 
-// ── 月次同期: 従業員1人ずつGET方式で分割送信 ──
-async function gasSyncMonth(y, m) {
-  if (!gasUrl) return;
-  showSyncStatus('月次同期中...', 'amber');
-  const allDaily = buildDailyRowsAll(y, m, cutoffDay);
-  const allMonthly = buildMonthlyRowsAll(y, m, cutoffDay);
-  for (const emp of employees) {
-    const dailyRows = allDaily.filter(r => r.empId === emp.id);
-    const dailyData = dailyRows.map(r => [
-      r.empId, r.empName, r.dept, r.schLabel, r.date, r.shift, r.isHol, r.reason,
-      r.clockIn, 0, r.breakOut, 0, r.breakBack, 0, r.clockOut, 0,
-      r.regular, r.overtime, r.earlyOT, r.lateNight, 0, r.breakHrs, r.lateEarly
-    ]);
-    const monthlyRows = allMonthly.filter(r => r.empId === emp.id);
-    const monthlyData = monthlyRows.map(s => [
-      s.empId, s.dept, s.name, s.schLabel, s.month, s.sched, s.worked,
-      0, 0, s.absent, 0, s.lateCnt, s.brkCnt, 0, 0,
-      s.regular, s.overtime, s.earlyOT, s.lateNight, 0,
-      0, 0, 0, 0, s.lateEarly, s.breakTime
-    ]);
-    if (dailyData.length > 0) {
-      await gasGet('syncMonth', {
-        month: m, dailyHeaders: DAILY_HEADERS, dailyRows: dailyData,
-        monthlyHeaders: MONTHLY_HEADERS, monthlyRows: monthlyData
-      });
-    }
-  }
-  showSyncStatus(`${m}月分 同期完了`, 'green');
-}
-
 let monthSyncTimer = null;
 function scheduleSyncRecord(empId, dk) {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => gasSaveRecord(empId, dk), 600);
-}
-function scheduleSyncMonth() {
-  if (monthSyncTimer) clearTimeout(monthSyncTimer);
-  monthSyncTimer = setTimeout(() => gasSyncMonth(viewYear, viewMonth), 800);
 }
 
 async function restoreSync() {
@@ -1704,13 +1612,7 @@ function renderEmployees() {
   const apEl = document.getElementById('adminPassInput');
   if (apEl) apEl.placeholder = '新しいパスワードを入力';
 
-  // デバッグ: スプレッドシートから取得した生データを表示
-  let debugHtml = `<div style="padding:8px 12px;margin-bottom:8px;background:var(--slate-50);border:1px solid var(--slate-200);border-radius:6px;font-size:10px;color:var(--slate-500)">
-    📋 データソース: ${gasUrl ? 'スプレッドシート' : 'ローカル'} ｜
-    ${employees.map(e => `${e.id}:${e.name}=<b style="color:var(--navy)">${e.schedule}</b>(${scheduleLabel(e.schedule)}) [raw:${e._rawSchedule||'なし'}]`).join(' / ')}
-  </div>`;
-
-  el.innerHTML = debugHtml + employees.map(e => {
+  el.innerHTML = employees.map(e => {
     const pw = passwords.emp[e.id] || '0000';
     const sch = e.schedule || 'weekends_holidays';
     return `
@@ -1769,7 +1671,7 @@ async function changeEmpSchedule(empId, newSchedule) {
   const saved = await gasUpsertEmployee(empId);
   if (saved) { toast('✅ 休日設定を保存しました'); }
   else { toast('⚠ スプレッドシートへの保存に失敗しました'); }
-  updateTodayStatus(); renderDaily(); renderMonthly(); scheduleSyncMonth();
+  updateTodayStatus(); renderDaily(); renderMonthly();
 }
 
 async function changeAdminPass() {
