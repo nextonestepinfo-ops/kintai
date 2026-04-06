@@ -494,7 +494,7 @@ const DEFAULT_PASSWORDS = {
 let employees = [], records = {}, punchLog = [], passwords = {};
 let viewYear, viewMonth, selectedEmpId, cutoffDay = 20;
 let currentUser = null;
-let gasUrl = 'https://script.google.com/macros/s/AKfycbyHX_jQq02Nd2vLqUSQ9oTcGS5UdPGYEJB86lhVa6LBbl_i7P7Ve8lLVo0_S68WFFY/exec';
+let gasUrl = 'https://script.google.com/macros/s/AKfycbxA0cJxhgV-R4qY5_aRz2wOiUzWxY0sXvdeFR93ZKRxp8zeJDP1bnDzmgKQvRvgVfjG/exec';
 
 async function sGet(k, fb) {
   try {
@@ -1539,7 +1539,7 @@ async function gasSaveRecord(empId, dk) {
         rd(tReg), rd(tOT), rd(tEarly), rd(tLate), 0, 0, 0, 0, 0, rd(tLE), rd(tBrk)
       ];
       console.log('月次送信');
-      await gasGet('upsertMonthlyRow', { row: monthlyRow });
+      await gasGet('upsertMonthlyRow', { row: monthlyRow, year: pm.y });
     } catch(e) {
       console.error('日次/月次送信エラー:', e);
     }
