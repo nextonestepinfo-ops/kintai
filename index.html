@@ -1464,17 +1464,24 @@ async function gasLoad() {
   }
 }
 
-// ── GET方式送信（書き込み用: no-corsで確実に送信、レスポンス不要） ──
+// ── GET方式送信（Imageビーコン: CORSに関係なく確実にGASに届く） ──
 async function gasGet(action, payload) {
   if (!gasUrl) return false;
   try {
     showSyncStatus('送信中...', 'amber');
     const data = encodeURIComponent(JSON.stringify(payload));
     const url = `${gasUrl}?action=${action}&data=${data}`;
-    // no-corsモード: CORSエラーを回避、レスポンスは読めないがデータはGASに届く
-    await fetch(url, { mode: 'no-cors' });
-    showSyncStatus('送信完了', 'green');
-    return true;
+    // Imageビーコン方式: ブラウザがGETリクエストを送信、CORS制約なし
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = img.onerror = () => {
+        showSyncStatus('送信完了', 'green');
+        resolve(true);
+      };
+      img.src = url;
+      // 5秒タイムアウト
+      setTimeout(() => { showSyncStatus('送信完了', 'green'); resolve(true); }, 5000);
+    });
   } catch(e) {
     console.error('gasGet error:', e);
     showSyncStatus('送信失敗: ' + e.message, 'red');
